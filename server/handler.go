@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -16,7 +15,7 @@ type Message struct {
 func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("upgrade error:", err)
+		s.logger.Println("upgrade error:", err)
 		return
 	}
 
@@ -46,7 +45,7 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			case <-ticker.C:
 				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					log.Printf("ping error to %s: %v", clientID, err)
+					s.logger.Printf("ping error to %s: %v", clientID, err)
 					return
 				}
 			case <-done:
@@ -72,7 +71,7 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("read error from %s: %v", clientID, err)
+			s.logger.Printf("read error from %s: %v", clientID, err)
 			break
 		}
 

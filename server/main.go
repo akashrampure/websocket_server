@@ -21,8 +21,15 @@ func main() {
 		path = "/ws"
 	}
 
+	file, err := os.OpenFile("server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+
+	logger := log.New(file, "", log.LstdFlags|log.Lshortfile)
+
 	config := NewWebSocketConfig(port, path)
-	server := NewWebSocketServer(config)
+	server := NewWebSocketServer(config, logger)
 
 	go server.Start()
 
@@ -37,5 +44,5 @@ func main() {
 	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)
 	<-sigint
 
-	log.Println("Shutting down the server...")
+	logger.Println("Shutting down the server...")
 }

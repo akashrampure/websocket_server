@@ -24,14 +24,16 @@ type SubscribeWS struct {
 	Host    string
 	Path    string
 	conn    *websocket.Conn
+	logger  *log.Logger
 	onClose chan os.Signal
 }
 
-func NewSubscribeWS(scheme, host, path string) *SubscribeWS {
+func NewSubscribeWS(scheme, host, path string, logger *log.Logger) *SubscribeWS {
 	return &SubscribeWS{
 		Scheme:  scheme,
 		Host:    host,
 		Path:    path,
+		logger:  logger,
 		onClose: make(chan os.Signal),
 	}
 }
@@ -41,13 +43,13 @@ func (s *SubscribeWS) Start() {
 		for i := 0; i < maxRetries; i++ {
 			err := s.connectAndListen()
 			if err != nil {
-				log.Printf("Connection lost: %v. Reconnecting (%d/%d)...", err, i+1, maxRetries)
+				s.logger.Printf("Connection lost: %v. Reconnecting (%d/%d)...", err, i+1, maxRetries)
 				time.Sleep(reconnectInterval)
 			} else {
 				return
 			}
 		}
-		log.Println("Max retries exceeded. Exiting...")
+		s.logger.Println("Max retries exceeded. Exiting...")
 		os.Exit(1)
 	}()
 
@@ -56,10 +58,10 @@ func (s *SubscribeWS) Start() {
 func (s *SubscribeWS) OnReceive() error {
 	_, msg, err := s.conn.ReadMessage()
 	if err != nil {
-		log.Println("Read error:", err)
+		s.logger.Println("Read error:", err)
 		return err
 	}
-	log.Println(string(msg))
+	s.logger.Println(string(msg))
 	return nil
 }
 
@@ -67,11 +69,11 @@ func (s *SubscribeWS) connectAndListen() error {
 	url := s.Scheme + "://" + s.Host + s.Path
 	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		log.Printf("Initial connection failed: %v", err)
+		s.logger.Printf("Initial connection failed: %v", err)
 		return err
 	}
 	s.conn = ws
-	log.Printf("Connected to %s", url)
+	s.logger.Printf("Connected to %s", url)
 
 	s.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	s.conn.SetPongHandler(func(appData string) error {
@@ -102,11 +104,11 @@ func (s *SubscribeWS) SendMessage(clientID string, msg []byte) {
 		}
 		jsonMsg, err := json.Marshal(message)
 		if err != nil {
-			log.Println("JSON marshal error:", err)
+			s.logger.Println("JSON marshal error:", err)
 			return
 		}
 		if err := s.conn.WriteMessage(websocket.TextMessage, jsonMsg); err != nil {
-			log.Println("Write error:", err)
+			s.logger.Println("Write error:", err)
 		}
 	}
 }

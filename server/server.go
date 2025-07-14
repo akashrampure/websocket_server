@@ -42,9 +42,11 @@ type WebSocketServer struct {
 	onReceive     MessageHandler
 	onConnect     func(clientID string)
 	onDisconnect  func(clientID string, err error)
+	logger        *log.Logger
 }
 
-func NewWebSocketServer(config WebSocketConfig) *WebSocketServer {
+func NewWebSocketServer(config WebSocketConfig, logger *log.Logger) *WebSocketServer {
+
 	return &WebSocketServer{
 		Config: config,
 		Upgrader: &websocket.Upgrader{
@@ -58,6 +60,7 @@ func NewWebSocketServer(config WebSocketConfig) *WebSocketServer {
 		onReceive:    func(clientID string, msg []byte) {},
 		onConnect:    func(clientID string) {},
 		onDisconnect: func(clientID string, err error) {},
+		logger:       logger,
 	}
 }
 
@@ -77,13 +80,13 @@ func (s *WebSocketServer) Start() {
 		}
 
 		s.OnConnect(func(clientID string) {
-			log.Printf("Client connected: %v", clientID)
+			s.logger.Printf("Client connected: %v", clientID)
 		})
 
 		s.OnDisconnect(func(clientID string, err error) {
-			log.Printf("Client disconnected: %s", clientID)
+			s.logger.Printf("Client disconnected: %s", clientID)
 			if len(s.connections) == 0 {
-				log.Println("No clients connected, shutting down server in 3 seconds...")
+				s.logger.Println("No clients connected, shutting down server in 3 seconds...")
 				time.Sleep(3 * time.Second)
 				os.Exit(0)
 			}
@@ -93,16 +96,16 @@ func (s *WebSocketServer) Start() {
 			var message Message
 			err := json.Unmarshal(msg, &message)
 			if err != nil {
-				log.Printf("Error marshalling message: %v", err)
+				s.logger.Printf("Error marshalling message: %v", err)
 				return
 			}
-			log.Printf("Client %s sent message: %s", message.ClientID, string(message.Data))
+			s.logger.Printf("Client %s sent message: %s", message.ClientID, string(message.Data))
 		})
 
-		log.Printf("WebSocket server started on %s", s.Config.Port)
+		s.logger.Printf("WebSocket server started on %s", s.Config.Port)
 		go func() {
 			if err := srv.ListenAndServe(); err != nil {
-				log.Println("server closed:", err)
+				s.logger.Println("server closed:", err)
 			}
 		}()
 	})
@@ -131,7 +134,7 @@ func (s *WebSocketServer) Broadcast(msg []byte) error {
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		err := conn.WriteMessage(websocket.TextMessage, msg)
 		if err != nil {
-			log.Printf("broadcast to %s failed: %v", id, err)
+			s.logger.Printf("broadcast to %s failed: %v", id, err)
 			conn.Close()
 			toRemove = append(toRemove, id)
 		}
