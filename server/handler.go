@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type Message struct {
@@ -28,7 +30,34 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		s.onConnect(clientID)
 	}
 
+	conn.SetReadLimit(1024)
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					log.Printf("ping error to %s: %v", clientID, err)
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	defer func() {
+		close(done)
+
 		s.connectionsMu.Lock()
 		delete(s.connections, clientID)
 		s.connectionsMu.Unlock()
@@ -40,13 +69,6 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 	}()
 
-	conn.SetReadLimit(1024)
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
-
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -57,6 +79,5 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		if s.onReceive != nil {
 			s.onReceive(clientID, msg)
 		}
-		log.Printf("Client %s sent message: %s", clientID, string(msg))
 	}
 }

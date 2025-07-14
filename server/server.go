@@ -122,15 +122,24 @@ func (s *WebSocketServer) OnDisconnect(fn func(clientID string, err error)) {
 }
 
 func (s *WebSocketServer) Broadcast(msg []byte) error {
-	s.connectionsMu.RLock()
-	defer s.connectionsMu.RUnlock()
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
+
+	var toRemove []string
+
 	for id, conn := range s.connections {
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		err := conn.WriteMessage(websocket.TextMessage, msg)
 		if err != nil {
 			log.Printf("broadcast to %s failed: %v", id, err)
 			conn.Close()
-			delete(s.connections, id)
+			toRemove = append(toRemove, id)
 		}
 	}
+
+	for _, id := range toRemove {
+		delete(s.connections, id)
+	}
+
 	return nil
 }

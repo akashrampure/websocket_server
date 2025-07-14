@@ -15,7 +15,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			sub.SendMessage([]byte("ping from client"))
+			sub.SendMessage("123", []byte("ping from client"))
 		}
 	}()
 

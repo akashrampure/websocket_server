@@ -73,6 +73,12 @@ func (s *SubscribeWS) connectAndListen() error {
 	s.conn = ws
 	log.Printf("Connected to %s", url)
 
+	s.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	s.conn.SetPongHandler(func(appData string) error {
+		s.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	defer s.conn.Close()
 
 	for {
@@ -88,10 +94,10 @@ func (s *SubscribeWS) Close() {
 	}
 }
 
-func (s *SubscribeWS) SendMessage(msg []byte) {
+func (s *SubscribeWS) SendMessage(clientID string, msg []byte) {
 	if s.conn != nil {
 		message := MessageStruct{
-			ClientID: "123",
+			ClientID: clientID,
 			Data:     msg,
 		}
 		jsonMsg, err := json.Marshal(message)
