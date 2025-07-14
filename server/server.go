@@ -99,10 +99,10 @@ func (s *WebSocketServer) Start() {
 				s.logger.Printf("Error marshalling message: %v", err)
 				return
 			}
-			s.logger.Printf("Client %s sent message: %s", message.ClientID, string(message.Data))
+			fmt.Printf("Received message from %s to %s: %s\n", message.Sender, message.Receiver, string(message.Data))
+			s.RelayMessage(message)
 		})
 
-		s.logger.Printf("WebSocket server started on %s", s.Config.Port)
 		go func() {
 			if err := srv.ListenAndServe(); err != nil {
 				s.logger.Println("server closed:", err)
@@ -128,17 +128,43 @@ func (s *WebSocketServer) Broadcast(message Message) error {
 	s.connectionsMu.Lock()
 	defer s.connectionsMu.Unlock()
 
-	conn, exists := s.connections[message.ClientID]
+	receiver := message.Receiver
+
+	conn, exists := s.connections[receiver]
 	if !exists {
-		return fmt.Errorf("client %s not found", message.ClientID)
+		return fmt.Errorf("client %s not found", receiver)
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	if err := conn.WriteMessage(websocket.TextMessage, message.Data); err != nil {
-		s.logger.Printf("broadcast to %s failed: %v", message.ClientID, err)
-		conn.Close()
-		delete(s.connections, message.ClientID)
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		s.logger.Printf("Error marshalling message: %v", err)
+		return err
+	}
+	conn.WriteMessage(websocket.TextMessage, msgBytes)
+
+	return nil
+}
+
+func (s *WebSocketServer) RelayMessage(message Message) error {
+	s.connectionsMu.Lock()
+	defer s.connectionsMu.Unlock()
+
+	receiver := message.Receiver
+	conn, exists := s.connections[receiver]
+	if !exists {
+		return fmt.Errorf("client %s not found", receiver)
 	}
 
+	msgBytes, err := json.Marshal(message)
+	if err != nil {
+		s.logger.Printf("Error marshalling message: %v", err)
+		return err
+	}
+	err = conn.WriteMessage(websocket.TextMessage, msgBytes)
+	if err != nil {
+		s.logger.Printf("Error writing message: %v", err)
+		return err
+	}
+	s.logger.Printf("Message relayed to %s", receiver)
 	return nil
 }

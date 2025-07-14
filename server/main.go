@@ -5,23 +5,24 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 	"websocket/utils"
 )
 
 func main() {
-	utils.LoadEnv()
+	utils.LoadEnv("/home/akash/Downloads/wsnew/.env")
+
+	// receiver := os.Args[1]
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	path := os.Getenv("PATH")
+	path := os.Getenv("WEBSOCKET_PATH")
 	if path == "" {
 		path = "/ws"
 	}
 
-	file, err := os.OpenFile("server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile("/home/akash/Downloads/wsnew/server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Failed to open log file: %v", err)
 	}
@@ -33,15 +34,16 @@ func main() {
 
 	go server.Start()
 
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			server.Broadcast(Message{
-				ClientID: "Client 1",
-				Data:     []byte("Hello, I am server!"),
-			})
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		time.Sleep(1 * time.Second)
+	// 		server.Broadcast(Message{
+	// 			Sender:   "Server",
+	// 			Receiver: receiver,
+	// 			Data:     []byte("Hello, I am server!"),
+	// 		})
+	// 	}
+	// }()
 
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)

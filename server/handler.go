@@ -8,7 +8,8 @@ import (
 )
 
 type Message struct {
-	ClientID string `json:"client_id"`
+	Sender   string `json:"sender"`
+	Receiver string `json:"receiver"`
 	Data     []byte `json:"data"`
 }
 
@@ -19,7 +20,7 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := r.RemoteAddr
+	clientID := r.Header.Get("Client-ID")
 
 	s.connectionsMu.Lock()
 	s.connections[clientID] = conn

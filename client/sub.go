@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -21,19 +23,21 @@ type Message struct {
 }
 
 type SubscribeWS struct {
-	Scheme string
-	Host   string
-	Path   string
-	conn   *websocket.Conn
-	logger *log.Logger
+	Scheme   string
+	Host     string
+	Path     string
+	ClientID string
+	conn     *websocket.Conn
+	logger   *log.Logger
 }
 
-func NewSubscribeWS(scheme, host, path string, logger *log.Logger) *SubscribeWS {
+func NewSubscribeWS(scheme, host, path, clientID string, logger *log.Logger) *SubscribeWS {
 	return &SubscribeWS{
-		Scheme: scheme,
-		Host:   host,
-		Path:   path,
-		logger: logger,
+		Scheme:   scheme,
+		Host:     host,
+		Path:     path,
+		ClientID: clientID,
+		logger:   logger,
 	}
 }
 
@@ -54,19 +58,32 @@ func (s *SubscribeWS) Start() {
 
 }
 
-func (s *SubscribeWS) OnReceive() error {
+func (s *SubscribeWS) OnReceive(clientID string) error {
 	_, msg, err := s.conn.ReadMessage()
 	if err != nil {
 		s.logger.Println("Read error:", err)
 		return err
 	}
-	s.logger.Println(string(msg))
+	var message Message
+	err = json.Unmarshal(msg, &message)
+	if err != nil {
+		s.logger.Println("JSON unmarshal error:", err)
+		return err
+	}
+	if message.Receiver == clientID {
+		fmt.Printf("Received message from %s to %s: %s\n", message.Sender, message.Receiver, string(message.Data))
+		return nil
+	}
 	return nil
 }
 
 func (s *SubscribeWS) connectAndListen() error {
 	url := s.Scheme + "://" + s.Host + s.Path
-	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+
+	headers := http.Header{}
+	headers.Add("Client-ID", s.ClientID)
+
+	ws, _, err := websocket.DefaultDialer.Dial(url, headers)
 	if err != nil {
 		s.logger.Printf("Initial connection failed: %v", err)
 		return err
@@ -83,7 +100,7 @@ func (s *SubscribeWS) connectAndListen() error {
 	defer s.conn.Close()
 
 	for {
-		if err := s.OnReceive(); err != nil {
+		if err := s.OnReceive(s.ClientID); err != nil {
 			return err
 		}
 	}
