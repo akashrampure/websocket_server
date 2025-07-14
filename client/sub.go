@@ -14,27 +14,26 @@ var (
 	maxRetries        = 5
 )
 
-type MessageStruct struct {
-	ClientID string `json:"client_id"`
+type Message struct {
+	Sender   string `json:"sender"`
+	Receiver string `json:"receiver"`
 	Data     []byte `json:"data"`
 }
 
 type SubscribeWS struct {
-	Scheme  string
-	Host    string
-	Path    string
-	conn    *websocket.Conn
-	logger  *log.Logger
-	onClose chan os.Signal
+	Scheme string
+	Host   string
+	Path   string
+	conn   *websocket.Conn
+	logger *log.Logger
 }
 
 func NewSubscribeWS(scheme, host, path string, logger *log.Logger) *SubscribeWS {
 	return &SubscribeWS{
-		Scheme:  scheme,
-		Host:    host,
-		Path:    path,
-		logger:  logger,
-		onClose: make(chan os.Signal),
+		Scheme: scheme,
+		Host:   host,
+		Path:   path,
+		logger: logger,
 	}
 }
 
@@ -96,12 +95,8 @@ func (s *SubscribeWS) Close() {
 	}
 }
 
-func (s *SubscribeWS) SendMessage(clientID string, msg []byte) {
+func (s *SubscribeWS) SendMessage(message Message) {
 	if s.conn != nil {
-		message := MessageStruct{
-			ClientID: clientID,
-			Data:     msg,
-		}
 		jsonMsg, err := json.Marshal(message)
 		if err != nil {
 			s.logger.Println("JSON marshal error:", err)

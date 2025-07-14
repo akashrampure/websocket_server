@@ -36,7 +36,10 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			server.Broadcast([]byte("Hello, I am server!"))
+			server.Broadcast(Message{
+				ClientID: "Client 1",
+				Data:     []byte("Hello, I am server!"),
+			})
 		}
 	}()
 

@@ -22,7 +22,11 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			sub.SendMessage("123", []byte("ping from client"))
+			sub.SendMessage(Message{
+				Sender:   "Client 1",
+				Receiver: "Client 2",
+				Data:     []byte("ping from client"),
+			})
 		}
 	}()
 
