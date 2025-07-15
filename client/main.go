@@ -19,8 +19,8 @@ func main() {
 
 	scheme := getEnv("SCHEME", "ws")
 	host := getEnv("HOST", "localhost")
-	port := getEnv("PORT", "8080")
-	path := getEnv("PATH", "/ws")
+	port := getEnv("SERVER_PORT", "8080")
+	path := getEnv("SERVER_PATH", "/ws")
 	maxRetries := getEnvInt("MAX_RETRIES", 5)
 	reconnectInterval := getEnvInt("RECONNECT_INTERVAL", 2)
 

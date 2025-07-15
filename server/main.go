@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"websocket/utils"
 )
@@ -14,14 +15,8 @@ func main() {
 		log.Fatalf("Failed to load .env file: %v", err)
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	path := os.Getenv("WEBSOCKET_PATH")
-	if path == "" {
-		path = "/ws"
-	}
+	port := getEnv("PORT", "8080")
+	path := getEnv("WEBSOCKET_PATH", "/ws")
 
 	file, err := os.OpenFile("/home/akash/Downloads/wsnew/server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -40,4 +35,24 @@ func main() {
 	<-sigint
 
 	logger.Println("Shutting down the server...")
+}
+
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	valueInt, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return valueInt
 }
