@@ -9,7 +9,10 @@ import (
 )
 
 func main() {
-	utils.LoadEnv("/home/akash/Downloads/wsnew/.env")
+	err := utils.LoadEnv("/home/akash/Downloads/wsnew/.env")
+	if err != nil {
+		log.Fatalf("Failed to load .env file: %v", err)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

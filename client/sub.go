@@ -2,19 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-var (
-	reconnectInterval = 2 * time.Second
-	maxRetries        = 5
-)
+type MessageHandler func(msg Message)
 
 type Message struct {
 	Sender   string `json:"sender"`
@@ -22,63 +19,68 @@ type Message struct {
 	Data     []byte `json:"data"`
 }
 
-type SubscribeWS struct {
-	Scheme   string
-	Host     string
-	Path     string
-	ClientID string
-	conn     *websocket.Conn
-	logger   *log.Logger
+type SubscribeConfig struct {
+	Scheme string
+	Host   string
+	Port   string
+	Path   string
+
+	MaxRetries        int
+	ReconnectInterval time.Duration
 }
 
-func NewSubscribeWS(scheme, host, path, clientID string, logger *log.Logger) *SubscribeWS {
+func NewSubscribeConfig(scheme, host, port, path string, maxRetries, reconnectInterval int) SubscribeConfig {
+	reconnectTime := time.Duration(reconnectInterval) * time.Second
+
+	return SubscribeConfig{
+		Scheme:            scheme,
+		Host:              host,
+		Port:              port,
+		Path:              path,
+		MaxRetries:        maxRetries,
+		ReconnectInterval: reconnectTime,
+	}
+}
+
+type SubscribeWS struct {
+	Config SubscribeConfig
+	connMu sync.RWMutex
+	logger *log.Logger
+	conn   *websocket.Conn
+
+	ClientID  string
+	onReceive MessageHandler
+}
+
+func NewSubscribeWS(config SubscribeConfig, clientID string, logger *log.Logger) *SubscribeWS {
 	return &SubscribeWS{
-		Scheme:   scheme,
-		Host:     host,
-		Path:     path,
+		Config:   config,
 		ClientID: clientID,
 		logger:   logger,
+		connMu:   sync.RWMutex{},
 	}
 }
 
 func (s *SubscribeWS) Start() {
 	go func() {
-		for i := 0; i < maxRetries; i++ {
+		for i := 0; i < s.Config.MaxRetries; i++ {
 			err := s.connectAndListen()
 			if err != nil {
-				s.logger.Printf("Connection lost: %v. Reconnecting (%d/%d)...", err, i+1, maxRetries)
-				time.Sleep(reconnectInterval)
+				s.logger.Printf("Connection lost: %v. Reconnecting (%d/%d)...", err, i+1, s.Config.MaxRetries)
+				time.Sleep(s.Config.ReconnectInterval)
 			} else {
 				return
 			}
 		}
-		s.logger.Println("Max retries exceeded. Exiting...")
+
+		s.Close()
+		s.logger.Println("Max retries reached. Exiting...")
 		os.Exit(1)
 	}()
-
-}
-
-func (s *SubscribeWS) OnReceive(clientID string) error {
-	_, msg, err := s.conn.ReadMessage()
-	if err != nil {
-		s.logger.Println("Read error:", err)
-		return err
-	}
-	var message Message
-	err = json.Unmarshal(msg, &message)
-	if err != nil {
-		s.logger.Println("JSON unmarshal error:", err)
-		return err
-	}
-	if message.Receiver == clientID {
-		fmt.Printf("Received message from %s to %s: %s\n", message.Sender, message.Receiver, string(message.Data))
-		return nil
-	}
-	return nil
 }
 
 func (s *SubscribeWS) connectAndListen() error {
-	url := s.Scheme + "://" + s.Host + s.Path
+	url := s.Config.Scheme + "://" + s.Config.Host + ":" + s.Config.Port + s.Config.Path
 
 	headers := http.Header{}
 	headers.Add("Client-ID", s.ClientID)
@@ -88,7 +90,9 @@ func (s *SubscribeWS) connectAndListen() error {
 		s.logger.Printf("Initial connection failed: %v", err)
 		return err
 	}
+	s.connMu.Lock()
 	s.conn = ws
+	s.connMu.Unlock()
 	s.logger.Printf("Connected to %s", url)
 
 	s.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -100,19 +104,47 @@ func (s *SubscribeWS) connectAndListen() error {
 	defer s.conn.Close()
 
 	for {
-		if err := s.OnReceive(s.ClientID); err != nil {
+		_, raw, err := s.conn.ReadMessage()
+		if err != nil {
 			return err
+		}
+
+		var message Message
+		if err := json.Unmarshal(raw, &message); err != nil {
+			s.logger.Println("JSON unmarshal error:", err)
+			continue
+		}
+
+		if s.onReceive != nil && message.Receiver == s.ClientID {
+			s.onReceive(message)
 		}
 	}
 }
 
 func (s *SubscribeWS) Close() {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
 	if s.conn != nil {
 		_ = s.conn.Close()
+		s.conn = nil
 	}
 }
 
-func (s *SubscribeWS) SendMessage(message Message) {
+func (s *SubscribeWS) SendMessage(receiver string, data interface{}) {
+	s.connMu.RLock()
+	defer s.connMu.RUnlock()
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		s.logger.Println("JSON marshal error:", err)
+		return
+	}
+
+	message := Message{
+		Sender:   s.ClientID,
+		Receiver: receiver,
+		Data:     jsonData,
+	}
 	if s.conn != nil {
 		jsonMsg, err := json.Marshal(message)
 		if err != nil {
@@ -123,4 +155,8 @@ func (s *SubscribeWS) SendMessage(message Message) {
 			s.logger.Println("Write error:", err)
 		}
 	}
+}
+
+func (s *SubscribeWS) SetOnReceive(handler MessageHandler) {
+	s.onReceive = handler
 }
