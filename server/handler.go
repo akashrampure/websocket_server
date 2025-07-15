@@ -21,6 +21,11 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientID := r.Header.Get("Client-ID")
+	if clientID == "" {
+		s.logger.Println("missing Client-ID header")
+		conn.Close()
+		return
+	}
 
 	s.connectionsMu.Lock()
 	s.connections[clientID] = conn

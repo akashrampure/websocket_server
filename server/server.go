@@ -46,6 +46,9 @@ type WebSocketServer struct {
 }
 
 func NewWebSocketServer(config WebSocketConfig, logger *log.Logger) *WebSocketServer {
+	if logger == nil {
+		logger = log.New(os.Stdout, "", log.LstdFlags)
+	}
 
 	return &WebSocketServer{
 		Config: config,
@@ -84,8 +87,11 @@ func (s *WebSocketServer) Start() {
 		})
 
 		s.OnDisconnect(func(clientID string, err error) {
-			s.logger.Printf("Client disconnected: %s", clientID)
-			if len(s.connections) == 0 {
+			s.connectionsMu.RLock()
+			noClients := len(s.connections) == 0
+			s.connectionsMu.RUnlock()
+
+			if noClients {
 				s.logger.Println("No clients connected, shutting down server in 3 seconds...")
 				time.Sleep(3 * time.Second)
 				os.Exit(0)
@@ -122,27 +128,6 @@ func (s *WebSocketServer) OnConnect(fn func(clientID string)) {
 
 func (s *WebSocketServer) OnDisconnect(fn func(clientID string, err error)) {
 	s.onDisconnect = fn
-}
-
-func (s *WebSocketServer) Broadcast(message Message) error {
-	s.connectionsMu.Lock()
-	defer s.connectionsMu.Unlock()
-
-	receiver := message.Receiver
-
-	conn, exists := s.connections[receiver]
-	if !exists {
-		return fmt.Errorf("client %s not found", receiver)
-	}
-
-	msgBytes, err := json.Marshal(message)
-	if err != nil {
-		s.logger.Printf("Error marshalling message: %v", err)
-		return err
-	}
-	conn.WriteMessage(websocket.TextMessage, msgBytes)
-
-	return nil
 }
 
 func (s *WebSocketServer) RelayMessage(message Message) error {

@@ -11,8 +11,6 @@ import (
 func main() {
 	utils.LoadEnv("/home/akash/Downloads/wsnew/.env")
 
-	// receiver := os.Args[1]
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -33,17 +31,6 @@ func main() {
 	server := NewWebSocketServer(config, logger)
 
 	go server.Start()
-
-	// go func() {
-	// 	for {
-	// 		time.Sleep(1 * time.Second)
-	// 		server.Broadcast(Message{
-	// 			Sender:   "Server",
-	// 			Receiver: receiver,
-	// 			Data:     []byte("Hello, I am server!"),
-	// 		})
-	// 	}
-	// }()
 
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)
