@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -51,7 +52,7 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			case <-ticker.C:
 				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Printf("ping error to %s: %v", clientID, err)
+					s.logger.Printf("ping error to %s: %v\n", clientID, err)
 					return
 				}
 			case <-done:
@@ -77,12 +78,19 @@ func (s *WebSocketServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			s.logger.Printf("read error from %s: %v", clientID, err)
+			s.logger.Printf("read error from %s: %v\n", clientID, err)
+			break
+		}
+
+		var message Message
+		err = json.Unmarshal(msg, &message)
+		if err != nil {
+			s.logger.Printf("error unmarshalling message: %v\n", err)
 			break
 		}
 
 		if s.onReceive != nil {
-			s.onReceive(clientID, msg)
+			s.onReceive(message)
 		}
 	}
 }

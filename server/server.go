@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 
 var serverOnce sync.Once
 
-type MessageHandler func(clientID string, msg []byte)
+type MessageHandler func(message Message)
 
 type WebSocketConfig struct {
 	Port            string
@@ -60,7 +61,7 @@ func NewWebSocketServer(config WebSocketConfig, logger *log.Logger) *WebSocketSe
 			},
 		},
 		connections:  make(map[string]*websocket.Conn),
-		onReceive:    func(clientID string, msg []byte) {},
+		onReceive:    func(message Message) {},
 		onConnect:    func(clientID string) {},
 		onDisconnect: func(clientID string, err error) {},
 		logger:       logger,
@@ -83,30 +84,32 @@ func (s *WebSocketServer) Start() {
 		}
 
 		s.OnConnect(func(clientID string) {
-			s.logger.Printf("Client connected: %v", clientID)
+			s.logger.Printf("Connected: %s\n", clientID)
 		})
 
 		s.OnDisconnect(func(clientID string, err error) {
+			if err != nil {
+				s.logger.Printf("Error disconnecting: %s: %v\n", clientID, err)
+			} else {
+				s.logger.Printf("Disconnected: %s\n", clientID)
+			}
+
 			s.connectionsMu.RLock()
 			noClients := len(s.connections) == 0
 			s.connectionsMu.RUnlock()
 
 			if noClients {
-				s.logger.Println("No clients connected, shutting down server in 3 seconds...")
-				time.Sleep(3 * time.Second)
+				s.logger.Println("No clients connected, shutting down server in 5 seconds...")
+				time.Sleep(5 * time.Second)
 				os.Exit(0)
 			}
 		})
 
-		s.OnReceive(func(clientID string, msg []byte) {
-			var message Message
-			err := json.Unmarshal(msg, &message)
-			if err != nil {
-				s.logger.Printf("Error marshalling message: %v", err)
-				return
-			}
+		s.OnReceive(func(message Message) {
 			fmt.Printf("Received message from %s to %s: %s\n", message.Sender, message.Receiver, string(message.Data))
-			s.RelayMessage(message)
+			if err := s.RelayMessage(message); err != nil {
+				s.logger.Printf("Error relaying message: %v\n", err)
+			}
 		})
 
 		go func() {
@@ -137,19 +140,19 @@ func (s *WebSocketServer) RelayMessage(message Message) error {
 	receiver := message.Receiver
 	conn, exists := s.connections[receiver]
 	if !exists {
-		return fmt.Errorf("client %s not found", receiver)
+		return errors.New("receiver not found")
 	}
 
 	msgBytes, err := json.Marshal(message)
 	if err != nil {
-		s.logger.Printf("Error marshalling message: %v", err)
+		s.logger.Printf("Error marshalling message: %v\n", err)
 		return err
 	}
 	err = conn.WriteMessage(websocket.TextMessage, msgBytes)
 	if err != nil {
-		s.logger.Printf("Error writing message: %v", err)
+		s.logger.Printf("Error writing message: %v\n", err)
 		return err
 	}
-	s.logger.Printf("Message relayed to %s", receiver)
+	s.logger.Printf("Message relayed to %s\n", receiver)
 	return nil
 }
