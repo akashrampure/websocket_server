@@ -51,7 +51,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			sub.SendMessage(receiver, "Hello, I am client "+clientID+"!")
+			sub.SendMessage(receiver, "Hello, I am "+clientID+"!")
 		}
 	}()
 
