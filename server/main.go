@@ -3,9 +3,7 @@ package main
 import (
 	"log"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"websocket/utils"
 )
 
@@ -28,13 +26,7 @@ func main() {
 	config := NewWebSocketConfig(port, path)
 	server := NewWebSocketServer(config, logger)
 
-	go server.Start()
-
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)
-	<-sigint
-
-	logger.Println("Shutting down the server...")
+	server.Start()
 }
 
 func getEnv(key, defaultValue string) string {
