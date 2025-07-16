@@ -49,6 +49,14 @@ type WebSocketServer struct {
 	logger        *log.Logger
 }
 
+func CreateLoggerFile(path string) (*log.Logger, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return log.New(file, "", log.LstdFlags), nil
+}
+
 func NewWebSocketServer(config WebSocketConfig, logger *log.Logger) *WebSocketServer {
 	if logger == nil {
 		logger = log.New(os.Stdout, "", log.LstdFlags)
@@ -121,6 +129,15 @@ func (s *WebSocketServer) Start() {
 		go func() {
 			<-sigint
 			s.logger.Println("Shutting down the server...")
+
+			s.connectionsMu.Lock()
+			defer s.connectionsMu.Unlock()
+
+			for clientID, conn := range s.connections {
+				conn.Close()
+				delete(s.connections, clientID)
+			}
+
 			if err := srv.Shutdown(context.Background()); err != nil {
 				s.logger.Printf("Error shutting down server: %v\n", err)
 			}
