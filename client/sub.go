@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -62,6 +64,17 @@ func NewSubscribeWS(config SubscribeConfig, clientID string, logger *log.Logger)
 }
 
 func (s *SubscribeWS) Start() {
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)
+
+		<-sigint
+
+		s.Close()
+		s.logger.Println("Shutting down gracefully...")
+		os.Exit(0)
+	}()
+
 	go func() {
 		for i := 0; i < s.Config.MaxRetries; i++ {
 			err := s.connectAndListen()

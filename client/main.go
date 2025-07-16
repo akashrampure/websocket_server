@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 	"websocket/utils"
 )
@@ -55,11 +53,6 @@ func main() {
 		}
 	}()
 
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, syscall.SIGINT, syscall.SIGTERM)
-	<-sigint
-
-	logger.Println("Shutting down the client...")
 }
 
 func getEnv(key, defaultValue string) string {
